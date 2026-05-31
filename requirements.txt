@@ -1,0 +1,8 @@
+pyqt5==5.15.4
+websockets
+websocket-client
+requests
+colorhash
+pathvalidate
+PyQtWebEngine
+semver
