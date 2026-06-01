@@ -1,4 +1,4 @@
-# WigF1s nParseExtended for Project1999
+# nParseExtended for Project1999
 
 Extended version of nParse with more functional custom triggers. Provides player location and spell tracking support for Project 1999 by reading the player log.
 
