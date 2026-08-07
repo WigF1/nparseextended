@@ -55,7 +55,7 @@ class SettingsWindow(QDialog):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('nParse Settings')
+        self.setWindowTitle('nParseExtended Settings')
 
         layout = QVBoxLayout()
 
