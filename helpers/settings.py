@@ -460,11 +460,24 @@ class CustomTriggerSettings(QDialog):
         trigger_layout.addRow(SettingsHeader('Trigger'))
 
         self._trigger_name = QLineEdit()
-        self._trigger_name.setMaxLength(50)
+        self._trigger_name.setReadOnly(True)
         trigger_layout.addRow('Name', self._trigger_name)
-        
+
+        self._trigger_name_text = QLineEdit()
+        self._trigger_name_text.setMaxLength(50)
+        self._trigger_name_text.textChanged.connect(self._update_name_preview)
+        trigger_layout.addRow('Trigger text', self._trigger_name_text)
+
+        self._trigger_category = QLineEdit()
+        self._trigger_category.setMaxLength(50)
+        self._trigger_category.setPlaceholderText('Custom')
+        self._trigger_category.textChanged.connect(self._update_name_preview)
+        trigger_layout.addRow('Category', self._trigger_category)
+        trigger_layout.addWidget(QLabel("Name is set automatically to 'Category - Trigger text'. "
+                                        "Triggers sharing a category are grouped together in the Spells window."))
+
         self._trigger_text = QLineEdit()
-        trigger_layout.addRow('Text', self._trigger_text)
+        trigger_layout.addRow('Search Text', self._trigger_text)
 
         trigger_layout.addWidget(QLabel("* matches anything (glob). Enable 'Use Regex' for full regex with named groups e.g. (?P<mob>a spider|a bat)"))
 
@@ -491,16 +504,23 @@ class CustomTriggerSettings(QDialog):
 
         self.setLayout(layout)
 
+    def _update_name_preview(self, _=None):
+        category = self._trigger_category.text() or 'Custom'
+        name_text = self._trigger_name_text.text()
+        self._trigger_name.setText('{} - {}'.format(category, name_text) if name_text else category)
+
     def _load_from_config(self):
         self._triggers.clear()
         for item in config.data['spells']['custom_timers']:
             ct = CustomTrigger(*item)
             self._custom_triggers[ct.name] = ct
             self._triggers.addItem(ct.name)
-        
+
         if self._custom_triggers:
             ct = self._custom_triggers[self._triggers.currentText()]
             self._trigger_name.setText(ct.name)
+            self._trigger_name_text.setText(ct.name_text)
+            self._trigger_category.setText(ct.category)
             self._trigger_text.setText(ct.text)
             self._trigger_time.setText(ct.time)
             self._trigger_allow_duplicate.setChecked(ct.allow_duplicate)
@@ -525,8 +545,10 @@ class CustomTriggerSettings(QDialog):
         self._current_trigger = self._triggers.currentText()
         self._clear()
         self._trigger_name.setPlaceholderText('<new>')
-        self._trigger_name.selectAll()
-        self._trigger_name.setFocus()
+        self._trigger_name_text.setPlaceholderText('<new>')
+        self._trigger_name_text.selectAll()
+        self._trigger_name_text.setFocus()
+        self._trigger_category.setPlaceholderText('Custom')
         self._trigger_text.setPlaceholderText('match*me')
         self._trigger_time.setPlaceholderText('hh:mm:ss')
     
@@ -540,44 +562,53 @@ class CustomTriggerSettings(QDialog):
         self._load_from_config()
     
     def _save_trigger(self):
-        if self._trigger_name.text():
+        name_text = self._trigger_name_text.text()
+        if name_text:
             # validate text and time
             if self._trigger_text.text() and\
                 text_time_to_seconds(self._trigger_time.text()):
-                if self._trigger_name.text() in self._custom_triggers.keys() and \
-                        not self._trigger_name.text() == self._current_trigger:
+                category = self._trigger_category.text() or 'Custom'
+                computed_name = '{} - {}'.format(category, name_text)
+                if computed_name in self._custom_triggers.keys() and \
+                        not computed_name == self._current_trigger:
                     m = QMessageBox()
                     m.setText("A custom trigger with this name already exists.")
                     m.exec()
-                elif not self._trigger_name.text() == self._current_trigger and \
+                elif not computed_name == self._current_trigger and \
                         not self._current_trigger == '':
-                    # update name and info
+                    # rename (category or trigger text changed) and update info
                     ct = self._custom_triggers.pop(self._current_trigger)
-                    ct.name = self._trigger_name.text()
+                    ct.category = category
+                    ct.name_text = name_text
                     ct.text = self._trigger_text.text()
                     ct.time = self._trigger_time.text()
                     ct.allow_duplicate = self._trigger_allow_duplicate.isChecked()
                     ct.use_regex = self._trigger_use_regex.isChecked()
+                    ct.update_name()
                     self._custom_triggers[ct.name] = ct
                 elif self._current_trigger == '':
                     # new trigger
                     ct = CustomTrigger(
-                        self._trigger_name.text(),
-                        self._trigger_text.text(),
-                        self._trigger_time.text(),
-                        self._trigger_allow_duplicate.isChecked(),
-                        self._trigger_use_regex.isChecked()
+                        text=self._trigger_text.text(),
+                        time=self._trigger_time.text(),
+                        allow_duplicate=self._trigger_allow_duplicate.isChecked(),
+                        use_regex=self._trigger_use_regex.isChecked(),
+                        category=category,
+                        name_text=name_text
                     )
                     self._custom_triggers[ct.name] = ct
                 else:
                     # update
                     ct = self._custom_triggers[self._current_trigger]
+                    ct.category = category
+                    ct.name_text = name_text
                     ct.text = self._trigger_text.text()
                     ct.time = self._trigger_time.text()
                     ct.allow_duplicate = self._trigger_allow_duplicate.isChecked()
                     ct.use_regex = self._trigger_use_regex.isChecked()
+                    ct.update_name()
                     self._custom_triggers[self._current_trigger] = ct
-                
+
                 # save and reload
                 current_index = self._triggers.currentIndex()
                 self._save_to_config()
@@ -594,15 +625,19 @@ class CustomTriggerSettings(QDialog):
         self._current_trigger = name = self._triggers.currentText()
         if name != "":
             self._trigger_name.setText(self._custom_triggers[name].name)
+            self._trigger_name_text.setText(self._custom_triggers[name].name_text)
+            self._trigger_category.setText(self._custom_triggers[name].category)
             self._trigger_text.setText(self._custom_triggers[name].text)
             self._trigger_time.setText(self._custom_triggers[name].time)
             self._trigger_allow_duplicate.setChecked(self._custom_triggers[name].allow_duplicate)
             self._trigger_use_regex.setChecked(self._custom_triggers[name].use_regex)
         else:
             self._clear()
-    
+
     def _clear(self):
         self._trigger_name.clear()
+        self._trigger_name_text.clear()
+        self._trigger_category.clear()
         self._trigger_text.clear()
         self._trigger_time.clear()
         self._trigger_allow_duplicate.setChecked(False)

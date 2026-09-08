@@ -93,12 +93,13 @@ class Spells(ParserWindow):
             for rx, ct in self._custom_timers.items():
                 m = rx.match(text)
                 if m:
-                    # Resolve the spell name — substitute any named groups into the template
+                    # Resolve the displayed spell name (trigger text only, not the full
+                    # "Category - Trigger text" name) — substitute any named groups into the template
                     groups = m.groupdict()
                     try:
-                        resolved_name = ct.name.format(**groups) if groups else ct.name
+                        resolved_name = ct.name_text.format(**groups) if groups else ct.name_text
                     except KeyError:
-                        resolved_name = ct.name
+                        resolved_name = ct.name_text
 
                     if ct.allow_duplicate:
                         existing = [
@@ -116,7 +117,8 @@ class Spells(ParserWindow):
                         duration_formula=11,
                         spell_icon=14
                     )
-                    self._spell_container.add_spell(spell, timestamp, '__custom__')    
+                    category_target = '__custom__:{}'.format(ct.category)
+                    self._spell_container.add_spell(spell, timestamp, category_target)
 
         # There are three main cases:
         # 1) Items that have cast messages like "<item> begins to glow."
@@ -265,6 +267,8 @@ class SpellTarget(QFrame):
             self.title = 'you'
         elif target == '__custom__':
             self.title = 'custom'
+        elif target.startswith('__custom__:'):
+            self.title = target.split(':', 1)[1]
         else:
             self.title = target
         self._initialized = False  # don't delete until after first spell
@@ -309,7 +313,7 @@ class SpellTarget(QFrame):
                 sw.recast(timestamp)
         if not recast:
             self.layout().addWidget(SpellWidget(spell, timestamp))
-        if self.name == '__you__' or self.name == '__custom__':
+        if self.name == '__you__' or self.name.startswith('__custom__'):
             self.target_label.setProperty('TargetType', 0)  # user
         elif not target_type:  # treat target like enemy
             self.target_label.setProperty('TargetType', 2)  # enemy
@@ -623,13 +627,23 @@ def get_spell_duration(spell, level):
 
 class CustomTrigger:
 
-    def __init__(self, name='', text='', time='', allow_duplicate=False, use_regex=False):
-        self.name, self.text, self.time, self.allow_duplicate, self.use_regex = name, text, time, allow_duplicate, use_regex
+    def __init__(self, name='', text='', time='', allow_duplicate=False, use_regex=False, category='Custom', name_text=''):
+        self.text, self.time, self.allow_duplicate, self.use_regex = text, time, allow_duplicate, use_regex
+        self.category = category or 'Custom'
+        # name_text is the user-entered portion of the name (may contain a {group} template).
+        # Older saved triggers won't have it, so fall back to whatever name was saved.
+        self.name_text = name_text if name_text else name
+        self.update_name()
+
+    def update_name(self):
+        """Recompute the read-only display name from category and name_text."""
+        self.name = '{} - {}'.format(self.category, self.name_text) if self.name_text else self.category
+        return self.name
 
     def to_list(self):
-        return [self.name, self.text, self.time, self.allow_duplicate, self.use_regex]
+        return [self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text]
 
     def __str__(self):
-        return '{},{},{},{},{}'.format(
-            self.name, self.text, self.time, self.allow_duplicate, self.use_regex
+        return '{},{},{},{},{},{},{}'.format(
+            self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text
         )
