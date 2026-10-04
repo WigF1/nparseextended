@@ -287,7 +287,24 @@ def verify_settings():
         False
     )
 
- 
+    # voice
+    data['voice'] = data.get('voice', {})
+    data['voice']['enabled'] = get_setting(
+        data['voice'].get('enabled', False),
+        False
+    )
+    data['voice']['gender'] = get_setting(
+        data['voice'].get('gender', 'default'),
+        'default',
+        lambda x: x in ('default', 'male', 'female')
+    )
+    data['voice']['rate'] = get_setting(
+        data['voice'].get('rate', 175),
+        175,
+        lambda x: (type(x) == int and 80 <= x <= 300)
+    )
+
+
 def get_setting(setting, default, func=None):
     try:
         assert(type(setting) == type(default))

@@ -66,3 +66,6 @@ docs/_build/
 wiki/
 old/
 nparse.config.json
+
+# Downloaded Piper voice models (fetched on first use, ~60MB each)
+data/voices/

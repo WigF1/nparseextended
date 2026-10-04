@@ -6,3 +6,4 @@ colorhash
 pathvalidate
 PyQtWebEngine
 semver
+piper-tts

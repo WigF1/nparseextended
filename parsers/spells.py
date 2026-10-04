@@ -8,7 +8,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QSpinBox, QVBoxLayout, QPushButton)
 
-from helpers import ParserWindow, config, format_time, text_time_to_seconds
+from helpers import ParserWindow, config, format_time, text_time_to_seconds, voice
 
 
 class Spells(ParserWindow):
@@ -102,12 +102,23 @@ class Spells(ParserWindow):
                         resolved_name = ct.name_text
 
                     if ct.allow_duplicate:
-                        existing = [
-                            sw for st in self._spell_container.spell_targets()
-                            for sw in st.spell_widgets()
-                            if sw.spell.name.startswith(resolved_name)
-                        ]
-                        spell_name = resolved_name if not existing else '{}{}'.format(resolved_name, len(existing) + 1)
+                        # Figure out which numbered slots (1 = bare name, 2+ = name + suffix)
+                        # are still on the board, then reuse the lowest one that's free. Using
+                        # a simple count of matches here would re-derive an index that's still
+                        # occupied once an earlier slot expires, causing the new kill to collide
+                        # with (and just recast) an existing timer instead of being added.
+                        used_indexes = set()
+                        for st in self._spell_container.spell_targets():
+                            for sw in st.spell_widgets():
+                                name = sw.spell.name
+                                if name == resolved_name:
+                                    used_indexes.add(1)
+                                elif name.startswith(resolved_name) and name[len(resolved_name):].isdigit():
+                                    used_indexes.add(int(name[len(resolved_name):]))
+                        index = 1
+                        while index in used_indexes:
+                            index += 1
+                        spell_name = resolved_name if index == 1 else '{}{}'.format(resolved_name, index)
                     else:
                         spell_name = resolved_name
 
@@ -115,7 +126,12 @@ class Spells(ParserWindow):
                         name=spell_name,
                         duration=int(text_time_to_seconds(ct.time)/6),
                         duration_formula=11,
-                        spell_icon=14
+                        spell_icon=14,
+                        voice_ending_enabled=ct.voice_ending_enabled,
+                        voice_ending_seconds=ct.voice_ending_seconds,
+                        voice_ending_text=ct.voice_ending_text,
+                        voice_ended_enabled=ct.voice_ended_enabled,
+                        voice_ended_text=ct.voice_ended_text
                     )
                     category_target = '__custom__:{}'.format(ct.category)
                     self._spell_container.add_spell(spell, timestamp, category_target)
@@ -334,6 +350,15 @@ class SpellWidget(QFrame):
         self.spell = spell
         self._active = True
 
+        # Optional per-trigger text-to-speech alerts (only set on custom timers).
+        self._voice_ending_enabled = getattr(spell, 'voice_ending_enabled', False)
+        self._voice_ending_seconds = getattr(spell, 'voice_ending_seconds', 0)
+        self._voice_ending_text = getattr(spell, 'voice_ending_text', '')
+        self._voice_ended_enabled = getattr(spell, 'voice_ended_enabled', False)
+        self._voice_ended_text = getattr(spell, 'voice_ended_text', '')
+        self._voice_ending_spoken = False
+        self._voice_ended_spoken = False
+
         self._setup_ui()
         self._calculate(timestamp)
         self.setProperty('Warning', False)
@@ -383,6 +408,8 @@ class SpellWidget(QFrame):
         self.setStyle(self.style())
         self._time_label.setProperty('Warning', False)
         self._time_label.setStyle(self._time_label.style())
+        self._voice_ending_spoken = False
+        self._voice_ended_spoken = False
 
     def _update(self):
         if self._active:
@@ -395,7 +422,14 @@ class SpellWidget(QFrame):
                 self.setStyle(self.style())
                 self._time_label.setProperty('Warning', True)
                 self._time_label.setStyle(self._time_label.style())
+            if (self._voice_ending_enabled and not self._voice_ending_spoken
+                    and 0 < remaining_seconds <= self._voice_ending_seconds):
+                voice.speak(self._voice_ending_text)
+                self._voice_ending_spoken = True
             if remaining_seconds <= 0:
+                if self._voice_ended_enabled and not self._voice_ended_spoken:
+                    voice.speak(self._voice_ended_text)
+                    self._voice_ended_spoken = True
                 self._remove()
             self._time_label.setText(format_time(remaining))
         QTimer.singleShot(1000, self._update)
@@ -627,12 +661,20 @@ def get_spell_duration(spell, level):
 
 class CustomTrigger:
 
-    def __init__(self, name='', text='', time='', allow_duplicate=False, use_regex=False, category='Custom', name_text=''):
+    def __init__(self, name='', text='', time='', allow_duplicate=False, use_regex=False, category='Custom', name_text='',
+                 voice_ending_enabled=False, voice_ending_seconds=10, voice_ending_text='',
+                 voice_ended_enabled=False, voice_ended_text=''):
         self.text, self.time, self.allow_duplicate, self.use_regex = text, time, allow_duplicate, use_regex
         self.category = category or 'Custom'
         # name_text is the user-entered portion of the name (may contain a {group} template).
         # Older saved triggers won't have it, so fall back to whatever name was saved.
         self.name_text = name_text if name_text else name
+        # Optional text-to-speech alerts, spoken while the timer's widget counts down.
+        self.voice_ending_enabled = voice_ending_enabled
+        self.voice_ending_seconds = voice_ending_seconds
+        self.voice_ending_text = voice_ending_text
+        self.voice_ended_enabled = voice_ended_enabled
+        self.voice_ended_text = voice_ended_text
         self.update_name()
 
     def update_name(self):
@@ -641,9 +683,15 @@ class CustomTrigger:
         return self.name
 
     def to_list(self):
-        return [self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text]
+        return [
+            self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text,
+            self.voice_ending_enabled, self.voice_ending_seconds, self.voice_ending_text,
+            self.voice_ended_enabled, self.voice_ended_text
+        ]
 
     def __str__(self):
-        return '{},{},{},{},{},{},{}'.format(
-            self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text
+        return '{},{},{},{},{},{},{},{},{},{},{}'.format(
+            self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text,
+            self.voice_ending_enabled, self.voice_ending_seconds, self.voice_ending_text,
+            self.voice_ended_enabled, self.voice_ended_text
         )

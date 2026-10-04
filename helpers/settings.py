@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QCheckBox, QDialog, QFormLayout, QFrame,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from helpers import config, text_time_to_seconds
+from helpers import config, text_time_to_seconds, voice
 
 from parsers.spells import CustomTrigger
 from helpers import location_service
@@ -49,6 +49,11 @@ When this option is set, the sharing key specified above will be ignored.""".rep
 WHATS_THIS_CLICKTHROUGH = """When set, the window will not capture mouse clicks, so your click will go through to
 whatever is below it. Practically, this means you can still interact with EverQuest *through* the nParse
 window.""".replace('\n', ' ')
+
+WHATS_THIS_VOICE = """Speaks alerts out loud using a local neural voice (via piper-tts). Requires the piper-tts
+package to be installed ('pip install piper-tts'). The first time a voice (Male/Female) is used, its model files
+(~60MB) are downloaded automatically, which requires an internet connection; after that, voice output works
+fully offline.""".replace('\n', ' ')
 
 
 class SettingsWindow(QDialog):
@@ -116,6 +121,9 @@ class SettingsWindow(QDialog):
                 elif wt == QLineEdit:
                     key1, key2 = widget.objectName().split(':')
                     config.data[key1][key2] = widget.text()
+                elif wt == QComboBox and widget.objectName():
+                    key1, key2 = widget.objectName().split(':')
+                    config.data[key1][key2] = widget.currentData()
         for widget in self._color_dialogs.values():
             wt = type(widget)
             if wt == QColorDialog:
@@ -160,6 +168,10 @@ class SettingsWindow(QDialog):
                 elif wt == QLineEdit:
                     key1, key2 = widget.objectName().split(':')
                     widget.setText(config.data[key1][key2])
+                elif wt == QComboBox and widget.objectName():
+                    key1, key2 = widget.objectName().split(':')
+                    index = widget.findData(config.data[key1][key2])
+                    widget.setCurrentIndex(index if index >= 0 else 0)
                 elif wt == QPushButton and widget.objectName():
                     # Using QPushButton as a poor-man's rectangle
                     key1, key2 = widget.objectName().split(':')
@@ -382,7 +394,54 @@ class SettingsWindow(QDialog):
         appearance_settings.setLayout(appear_sl)
         stacked_widgets.append(('Appearance', appearance_settings))
 
+        # Voice Settings
+        voice_settings = QFrame()
+        vsl = QFormLayout()
+        vsl.addRow(SettingsHeader('general'))
+        voice_enabled = QCheckBox()
+        voice_enabled.setWhatsThis(WHATS_THIS_VOICE)
+        voice_enabled.setObjectName('voice:enabled')
+        vsl.addRow('Enable Voice Output', voice_enabled)
+
+        voice_gender = QComboBox()
+        voice_gender.setObjectName('voice:gender')
+        voice_gender.addItem('Default', 'default')
+        voice_gender.addItem('Male', 'male')
+        voice_gender.addItem('Female', 'female')
+        vsl.addRow('Voice', voice_gender)
+
+        voice_rate = QSpinBox()
+        voice_rate.setObjectName('voice:rate')
+        voice_rate.setRange(80, 300)
+        voice_rate.setSingleStep(10)
+        voice_rate.setSuffix(' wpm')
+        vsl.addRow('Speaking Rate', voice_rate)
+
+        voice_test_button = QPushButton('Test Voice')
+        voice_test_button.setAutoDefault(False)
+        voice_test_button.clicked.connect(
+            functools.partial(self._test_voice, voice_gender, voice_rate))
+        vsl.addRow('', voice_test_button)
+
+        voice_settings.setLayout(vsl)
+        stacked_widgets.append(('Voice', voice_settings))
+
         return stacked_widgets
+
+    def _test_voice(self, gender_widget, rate_widget):
+        if not voice.is_available():
+            m = QMessageBox()
+            m.setText(
+                "piper-tts is not installed, so voice output is unavailable. "
+                "Install it with 'pip install piper-tts'."
+            )
+            m.exec()
+            return
+        voice.speak_preview(
+            "This is a test of nParse voice output.",
+            gender=gender_widget.currentData(),
+            rate=rate_widget.value()
+        )
 
     def show_color_picker(self, window, preview):
         dialog = self._color_dialogs[window]
@@ -422,6 +481,7 @@ class CustomTriggerSettings(QDialog):
         
         self._custom_triggers = {}
         self._current_trigger = ''
+        self._trigger_voice = self._default_voice_values()
 
         self.setWindowTitle("Custom Timers")
         self._setup_ui()
@@ -491,6 +551,11 @@ class CustomTriggerSettings(QDialog):
         self._trigger_use_regex = QCheckBox()
         trigger_layout.addRow('Use Regex', self._trigger_use_regex)
 
+        self._trigger_voice_button = QPushButton('Voice Alerts...')
+        self._trigger_voice_button.setAutoDefault(False)
+        self._trigger_voice_button.clicked.connect(self._open_voice_alerts)
+        trigger_layout.addRow('Voice Alerts', self._trigger_voice_button)
+
         layout.addItem(trigger_layout)
 
         layout.addWidget(QWidget(), 1)  # spacer
@@ -503,6 +568,29 @@ class CustomTriggerSettings(QDialog):
         layout.addItem(button_layout)
 
         self.setLayout(layout)
+
+    def _default_voice_values(self):
+        return {
+            'voice_ending_enabled': False,
+            'voice_ending_seconds': 10,
+            'voice_ending_text': '',
+            'voice_ended_enabled': False,
+            'voice_ended_text': '',
+        }
+
+    def _voice_values_from_trigger(self, ct):
+        return {
+            'voice_ending_enabled': getattr(ct, 'voice_ending_enabled', False),
+            'voice_ending_seconds': getattr(ct, 'voice_ending_seconds', 10),
+            'voice_ending_text': getattr(ct, 'voice_ending_text', ''),
+            'voice_ended_enabled': getattr(ct, 'voice_ended_enabled', False),
+            'voice_ended_text': getattr(ct, 'voice_ended_text', ''),
+        }
+
+    def _open_voice_alerts(self):
+        dialog = TriggerVoiceDialog(self._trigger_voice)
+        if dialog.exec():
+            self._trigger_voice = dialog.get_values()
 
     def _update_name_preview(self, _=None):
         category = self._trigger_category.text() or 'Custom'
@@ -525,6 +613,7 @@ class CustomTriggerSettings(QDialog):
             self._trigger_time.setText(ct.time)
             self._trigger_allow_duplicate.setChecked(ct.allow_duplicate)
             self._trigger_use_regex.setChecked(ct.use_regex)
+            self._trigger_voice = self._voice_values_from_trigger(ct)
             self._current_trigger = self._triggers.currentText()
         else:
             self._current_trigger = None
@@ -584,6 +673,7 @@ class CustomTriggerSettings(QDialog):
                     ct.time = self._trigger_time.text()
                     ct.allow_duplicate = self._trigger_allow_duplicate.isChecked()
                     ct.use_regex = self._trigger_use_regex.isChecked()
+                    ct.__dict__.update(self._trigger_voice)
                     ct.update_name()
                     self._custom_triggers[ct.name] = ct
                 elif self._current_trigger == '':
@@ -594,7 +684,8 @@ class CustomTriggerSettings(QDialog):
                         allow_duplicate=self._trigger_allow_duplicate.isChecked(),
                         use_regex=self._trigger_use_regex.isChecked(),
                         category=category,
-                        name_text=name_text
+                        name_text=name_text,
+                        **self._trigger_voice
                     )
                     self._custom_triggers[ct.name] = ct
                 else:
@@ -606,6 +697,7 @@ class CustomTriggerSettings(QDialog):
                     ct.time = self._trigger_time.text()
                     ct.allow_duplicate = self._trigger_allow_duplicate.isChecked()
                     ct.use_regex = self._trigger_use_regex.isChecked()
+                    ct.__dict__.update(self._trigger_voice)
                     ct.update_name()
                     self._custom_triggers[self._current_trigger] = ct
 
@@ -631,6 +723,7 @@ class CustomTriggerSettings(QDialog):
             self._trigger_time.setText(self._custom_triggers[name].time)
             self._trigger_allow_duplicate.setChecked(self._custom_triggers[name].allow_duplicate)
             self._trigger_use_regex.setChecked(self._custom_triggers[name].use_regex)
+            self._trigger_voice = self._voice_values_from_trigger(self._custom_triggers[name])
         else:
             self._clear()
 
@@ -642,6 +735,7 @@ class CustomTriggerSettings(QDialog):
         self._trigger_time.clear()
         self._trigger_allow_duplicate.setChecked(False)
         self._trigger_use_regex.setChecked(False)
+        self._trigger_voice = self._default_voice_values()
     def _close(self, _):
         self._save_to_config()
         self.accept()
@@ -649,3 +743,96 @@ class CustomTriggerSettings(QDialog):
     def closeEvent(self, _):
         self._save_to_config()
         self.accept()
+
+
+class TriggerVoiceDialog(QDialog):
+    """Per-trigger 'timer ending' / 'timer ended' text-to-speech settings."""
+
+    def __init__(self, values=None):
+        super().__init__()
+        self.setWindowTitle("Voice Alerts")
+        self._setup_ui()
+        self._set_values(values or {})
+
+    def _setup_ui(self):
+        layout = QVBoxLayout()
+
+        # Timer Ending section
+        ending_frame = QFrame()
+        ending_layout = QFormLayout()
+        ending_layout.addRow(SettingsHeader('Timer Ending'))
+        self._ending_enabled = QCheckBox()
+        ending_layout.addRow('Enable', self._ending_enabled)
+
+        time_layout = QHBoxLayout()
+        self._ending_hours = QSpinBox()
+        self._ending_hours.setRange(0, 23)
+        self._ending_hours.setSuffix(' h')
+        self._ending_minutes = QSpinBox()
+        self._ending_minutes.setRange(0, 59)
+        self._ending_minutes.setSuffix(' m')
+        self._ending_seconds = QSpinBox()
+        self._ending_seconds.setRange(0, 59)
+        self._ending_seconds.setSuffix(' s')
+        time_layout.addWidget(self._ending_hours)
+        time_layout.addWidget(self._ending_minutes)
+        time_layout.addWidget(self._ending_seconds)
+        ending_layout.addRow('Announce before expiry', time_layout)
+
+        self._ending_text = QLineEdit()
+        self._ending_text.setPlaceholderText('e.g. Mob timer ending soon')
+        ending_layout.addRow('Text to speak', self._ending_text)
+        ending_frame.setLayout(ending_layout)
+        layout.addWidget(ending_frame)
+
+        # Timer Ended section
+        ended_frame = QFrame()
+        ended_layout = QFormLayout()
+        ended_layout.addRow(SettingsHeader('Timer Ended'))
+        self._ended_enabled = QCheckBox()
+        ended_layout.addRow('Enable', self._ended_enabled)
+        self._ended_text = QLineEdit()
+        self._ended_text.setPlaceholderText('e.g. Mob timer has ended')
+        ended_layout.addRow('Text to speak', self._ended_text)
+        ended_frame.setLayout(ended_layout)
+        layout.addWidget(ended_frame)
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(QWidget(), 1)  # spacer
+        ok_button = QPushButton('OK')
+        ok_button.setAutoDefault(False)
+        ok_button.clicked.connect(self.accept)
+        button_layout.addWidget(ok_button)
+        cancel_button = QPushButton('Cancel')
+        cancel_button.setAutoDefault(False)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_button)
+        layout.addItem(button_layout)
+
+        self.setLayout(layout)
+
+    def _set_values(self, values):
+        total_seconds = int(values.get('voice_ending_seconds', 10) or 0)
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self._ending_enabled.setChecked(values.get('voice_ending_enabled', False))
+        self._ending_hours.setValue(hours)
+        self._ending_minutes.setValue(minutes)
+        self._ending_seconds.setValue(seconds)
+        self._ending_text.setText(values.get('voice_ending_text', ''))
+        self._ended_enabled.setChecked(values.get('voice_ended_enabled', False))
+        self._ended_text.setText(values.get('voice_ended_text', ''))
+
+    def get_values(self):
+        total_seconds = (
+            self._ending_hours.value() * 3600
+            + self._ending_minutes.value() * 60
+            + self._ending_seconds.value()
+        )
+        return {
+            'voice_ending_enabled': self._ending_enabled.isChecked(),
+            'voice_ending_seconds': total_seconds,
+            'voice_ending_text': self._ending_text.text(),
+            'voice_ended_enabled': self._ended_enabled.isChecked(),
+            'voice_ended_text': self._ended_text.text(),
+        }
