@@ -8,7 +8,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QScrollArea, QSpinBox, QVBoxLayout, QPushButton)
 
-from helpers import ParserWindow, config, format_time, text_time_to_seconds, voice
+from helpers import ParserWindow, config, format_time, sound, text_time_to_seconds, voice
 
 
 class Spells(ParserWindow):
@@ -100,6 +100,17 @@ class Spells(ParserWindow):
                         resolved_name = ct.name_text.format(**groups) if groups else ct.name_text
                     except KeyError:
                         resolved_name = ct.name_text
+
+                    if ct.voice_match_enabled:
+                        try:
+                            voice.speak(ct.voice_match_text.format(**groups) if groups else ct.voice_match_text)
+                        except (KeyError, IndexError, ValueError):
+                            voice.speak(ct.voice_match_text)
+                    if ct.sound_match_enabled:
+                        sound.play(ct.sound_match_file)
+
+                    if not text_time_to_seconds(ct.time):
+                        continue  # alert-only trigger, no timer widget
 
                     if ct.allow_duplicate:
                         # Figure out which numbered slots (1 = bare name, 2+ = name + suffix)
@@ -663,7 +674,9 @@ class CustomTrigger:
 
     def __init__(self, name='', text='', time='', allow_duplicate=False, use_regex=False, category='Custom', name_text='',
                  voice_ending_enabled=False, voice_ending_seconds=10, voice_ending_text='',
-                 voice_ended_enabled=False, voice_ended_text=''):
+                 voice_ended_enabled=False, voice_ended_text='',
+                 voice_match_enabled=False, voice_match_text='',
+                 sound_match_enabled=False, sound_match_file=''):
         self.text, self.time, self.allow_duplicate, self.use_regex = text, time, allow_duplicate, use_regex
         self.category = category or 'Custom'
         # name_text is the user-entered portion of the name (may contain a {group} template).
@@ -675,7 +688,18 @@ class CustomTrigger:
         self.voice_ending_text = voice_ending_text
         self.voice_ended_enabled = voice_ended_enabled
         self.voice_ended_text = voice_ended_text
+        # Optional text-to-speech alert spoken as soon as the trigger matches. With no
+        # time set, this makes the trigger alert-only (no timer widget is created).
+        self.voice_match_enabled = voice_match_enabled
+        self.voice_match_text = voice_match_text
+        # Optional sound file (WAV/MP3, stored in data/sounds/) played when the trigger matches.
+        self.sound_match_enabled = sound_match_enabled
+        self.sound_match_file = sound_match_file
         self.update_name()
+
+    def has_match_alert(self):
+        """True if the trigger speaks or plays a sound as soon as it matches."""
+        return bool(self.voice_match_enabled or self.sound_match_enabled)
 
     def update_name(self):
         """Recompute the read-only display name from category and name_text."""
@@ -686,12 +710,16 @@ class CustomTrigger:
         return [
             self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text,
             self.voice_ending_enabled, self.voice_ending_seconds, self.voice_ending_text,
-            self.voice_ended_enabled, self.voice_ended_text
+            self.voice_ended_enabled, self.voice_ended_text,
+            self.voice_match_enabled, self.voice_match_text,
+            self.sound_match_enabled, self.sound_match_file
         ]
 
     def __str__(self):
-        return '{},{},{},{},{},{},{},{},{},{},{}'.format(
+        return '{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}'.format(
             self.name, self.text, self.time, self.allow_duplicate, self.use_regex, self.category, self.name_text,
             self.voice_ending_enabled, self.voice_ending_seconds, self.voice_ending_text,
-            self.voice_ended_enabled, self.voice_ended_text
+            self.voice_ended_enabled, self.voice_ended_text,
+            self.voice_match_enabled, self.voice_match_text,
+            self.sound_match_enabled, self.sound_match_file
         )

@@ -304,6 +304,18 @@ def verify_settings():
         lambda x: (type(x) == int and 80 <= x <= 300)
     )
 
+    # sound
+    data['sound'] = data.get('sound', {})
+    data['sound']['enabled'] = get_setting(
+        data['sound'].get('enabled', True),
+        True
+    )
+    data['sound']['volume'] = get_setting(
+        data['sound'].get('volume', 100),
+        100,
+        lambda x: (type(x) == int and 0 <= x <= 100)
+    )
+
 
 def get_setting(setting, default, func=None):
     try:

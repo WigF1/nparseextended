@@ -4,12 +4,12 @@ from PyQt5.QtWidgets import (QCheckBox, QDialog, QFormLayout, QFrame,
                              QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                              QSpinBox, QStackedWidget, QPushButton,
                              QVBoxLayout, QWidget, QComboBox, QLineEdit,
-                             QMessageBox, QColorDialog)
+                             QMessageBox, QColorDialog, QFileDialog)
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from helpers import config, text_time_to_seconds, voice
+from helpers import config, sound, text_time_to_seconds, voice
 
 from parsers.spells import CustomTrigger
 from helpers import location_service
@@ -49,6 +49,10 @@ When this option is set, the sharing key specified above will be ignored.""".rep
 WHATS_THIS_CLICKTHROUGH = """When set, the window will not capture mouse clicks, so your click will go through to
 whatever is below it. Practically, this means you can still interact with EverQuest *through* the nParse
 window.""".replace('\n', ' ')
+
+WHATS_THIS_SOUND = """Plays the sound files (WAV or MP3) chosen for custom triggers' 'On Match' alerts. Playback uses
+your operating system's media codecs, so MP3 files require the usual codecs to be installed.
+""".replace('\n', ' ')
 
 WHATS_THIS_VOICE = """Speaks alerts out loud using a local neural voice (via piper-tts). Requires the piper-tts
 package to be installed ('pip install piper-tts'). The first time a voice (Male/Female) is used, its model files
@@ -231,7 +235,7 @@ class SettingsWindow(QDialog):
             )
         ssl_open_custom = QPushButton("Edit")
         ssl_open_custom.clicked.connect(self._get_custom_timers)
-        row = ssl.addRow('Custom Timers', ssl_open_custom)
+        row = ssl.addRow('Custom Triggers', ssl_open_custom)
 
         ssl.addRow(SettingsHeader('experimental'))
         ssl_secondary_duration = QCheckBox()
@@ -426,6 +430,26 @@ class SettingsWindow(QDialog):
         voice_settings.setLayout(vsl)
         stacked_widgets.append(('Voice', voice_settings))
 
+        # Sound Settings
+        sound_settings = QFrame()
+        ssl_sound = QFormLayout()
+        ssl_sound.addRow(SettingsHeader('general'))
+        sound_enabled = QCheckBox()
+        sound_enabled.setWhatsThis(WHATS_THIS_SOUND)
+        sound_enabled.setObjectName('sound:enabled')
+        ssl_sound.addRow('Enable Sound Output', sound_enabled)
+
+        sound_volume = QSpinBox()
+        sound_volume.setObjectName('sound:volume')
+        sound_volume.setRange(0, 100)
+        sound_volume.setSingleStep(5)
+        sound_volume.setSuffix(' %')
+        ssl_sound.addRow('Volume', sound_volume)
+        ssl_sound.addRow(QLabel("Sounds are chosen per trigger under Custom Triggers > Alerts."))
+
+        sound_settings.setLayout(ssl_sound)
+        stacked_widgets.append(('Sound', sound_settings))
+
         return stacked_widgets
 
     def _test_voice(self, gender_widget, rate_widget):
@@ -483,7 +507,7 @@ class CustomTriggerSettings(QDialog):
         self._current_trigger = ''
         self._trigger_voice = self._default_voice_values()
 
-        self.setWindowTitle("Custom Timers")
+        self.setWindowTitle("Custom Triggers")
         self._setup_ui()
         self._load_from_config()
     
@@ -534,7 +558,8 @@ class CustomTriggerSettings(QDialog):
         self._trigger_category.textChanged.connect(self._update_name_preview)
         trigger_layout.addRow('Category', self._trigger_category)
         trigger_layout.addWidget(QLabel("Name is set automatically to 'Category - Trigger text'. "
-                                        "Triggers sharing a category are grouped together in the Spells window."))
+                                        "Triggers sharing a category are grouped together in the Spells window.\n"
+                                        "Leave Category blank to use 'Custom' (or 'Audio Alert' for alert-only triggers)."))
 
         self._trigger_text = QLineEdit()
         trigger_layout.addRow('Search Text', self._trigger_text)
@@ -543,7 +568,9 @@ class CustomTriggerSettings(QDialog):
 
         self._trigger_time = QLineEdit()
         self._trigger_time.setText("hh:mm:ss")
+        self._trigger_time.textChanged.connect(self._update_name_preview)
         trigger_layout.addRow('Time', self._trigger_time)
+        trigger_layout.addWidget(QLabel("Leave Time blank for an alert-only trigger (requires an 'On Match' voice or sound alert)."))
 
         self._trigger_allow_duplicate = QCheckBox()
         trigger_layout.addRow('Allow Duplicates', self._trigger_allow_duplicate)
@@ -551,10 +578,10 @@ class CustomTriggerSettings(QDialog):
         self._trigger_use_regex = QCheckBox()
         trigger_layout.addRow('Use Regex', self._trigger_use_regex)
 
-        self._trigger_voice_button = QPushButton('Voice Alerts...')
+        self._trigger_voice_button = QPushButton('Alerts...')
         self._trigger_voice_button.setAutoDefault(False)
         self._trigger_voice_button.clicked.connect(self._open_voice_alerts)
-        trigger_layout.addRow('Voice Alerts', self._trigger_voice_button)
+        trigger_layout.addRow('Alerts', self._trigger_voice_button)
 
         layout.addItem(trigger_layout)
 
@@ -576,6 +603,10 @@ class CustomTriggerSettings(QDialog):
             'voice_ending_text': '',
             'voice_ended_enabled': False,
             'voice_ended_text': '',
+            'voice_match_enabled': False,
+            'voice_match_text': '',
+            'sound_match_enabled': False,
+            'sound_match_file': '',
         }
 
     def _voice_values_from_trigger(self, ct):
@@ -585,15 +616,33 @@ class CustomTriggerSettings(QDialog):
             'voice_ending_text': getattr(ct, 'voice_ending_text', ''),
             'voice_ended_enabled': getattr(ct, 'voice_ended_enabled', False),
             'voice_ended_text': getattr(ct, 'voice_ended_text', ''),
+            'voice_match_enabled': getattr(ct, 'voice_match_enabled', False),
+            'voice_match_text': getattr(ct, 'voice_match_text', ''),
+            'sound_match_enabled': getattr(ct, 'sound_match_enabled', False),
+            'sound_match_file': getattr(ct, 'sound_match_file', ''),
         }
 
     def _open_voice_alerts(self):
         dialog = TriggerVoiceDialog(self._trigger_voice)
         if dialog.exec():
             self._trigger_voice = dialog.get_values()
+            self._update_name_preview()
+
+    def _is_alert_only(self):
+        """True when the trigger has no timer and just speaks when it matches."""
+        return (not text_time_to_seconds(self._trigger_time.text()) and
+                self._has_match_alert())
+
+    def _has_match_alert(self):
+        return bool(self._trigger_voice.get('voice_match_enabled') or
+                    self._trigger_voice.get('sound_match_enabled'))
+
+    def _default_category(self):
+        return 'Audio Alert' if self._is_alert_only() else 'Custom'
 
     def _update_name_preview(self, _=None):
-        category = self._trigger_category.text() or 'Custom'
+        self._trigger_category.setPlaceholderText(self._default_category())
+        category = self._trigger_category.text() or self._default_category()
         name_text = self._trigger_name_text.text()
         self._trigger_name.setText('{} - {}'.format(category, name_text) if name_text else category)
 
@@ -614,6 +663,7 @@ class CustomTriggerSettings(QDialog):
             self._trigger_allow_duplicate.setChecked(ct.allow_duplicate)
             self._trigger_use_regex.setChecked(ct.use_regex)
             self._trigger_voice = self._voice_values_from_trigger(ct)
+            self._update_name_preview()
             self._current_trigger = self._triggers.currentText()
         else:
             self._current_trigger = None
@@ -653,10 +703,11 @@ class CustomTriggerSettings(QDialog):
     def _save_trigger(self):
         name_text = self._trigger_name_text.text()
         if name_text:
-            # validate text and time
-            if self._trigger_text.text() and\
-                text_time_to_seconds(self._trigger_time.text()):
-                category = self._trigger_category.text() or 'Custom'
+            # validate text and time (time may be blank for an alert-only trigger)
+            if self._trigger_text.text() and (
+                    text_time_to_seconds(self._trigger_time.text()) or
+                    self._has_match_alert()):
+                category = self._trigger_category.text() or self._default_category()
                 computed_name = '{} - {}'.format(category, name_text)
                 if computed_name in self._custom_triggers.keys() and \
                         not computed_name == self._current_trigger:
@@ -710,7 +761,8 @@ class CustomTriggerSettings(QDialog):
 
             else:
                 m = QMessageBox()
-                m.setText("Both the text and time (hh:mm:ss) need to be filled out.")
+                m.setText("Search text is required, along with either a time (hh:mm:ss) "
+                          "or an enabled 'On Match' alert (voice or sound).")
                 m.exec()
     
     def _activated(self, _):
@@ -724,10 +776,12 @@ class CustomTriggerSettings(QDialog):
             self._trigger_allow_duplicate.setChecked(self._custom_triggers[name].allow_duplicate)
             self._trigger_use_regex.setChecked(self._custom_triggers[name].use_regex)
             self._trigger_voice = self._voice_values_from_trigger(self._custom_triggers[name])
+            self._update_name_preview()
         else:
             self._clear()
 
     def _clear(self):
+        self._trigger_voice = self._default_voice_values()  # reset first so the name preview sees it
         self._trigger_name.clear()
         self._trigger_name_text.clear()
         self._trigger_category.clear()
@@ -735,7 +789,6 @@ class CustomTriggerSettings(QDialog):
         self._trigger_time.clear()
         self._trigger_allow_duplicate.setChecked(False)
         self._trigger_use_regex.setChecked(False)
-        self._trigger_voice = self._default_voice_values()
     def _close(self, _):
         self._save_to_config()
         self.accept()
@@ -746,16 +799,46 @@ class CustomTriggerSettings(QDialog):
 
 
 class TriggerVoiceDialog(QDialog):
-    """Per-trigger 'timer ending' / 'timer ended' text-to-speech settings."""
+    """Per-trigger alert settings: 'on match' voice/sound, plus 'timer ending' / 'timer ended' voice."""
 
     def __init__(self, values=None):
         super().__init__()
-        self.setWindowTitle("Voice Alerts")
+        self.setWindowTitle("Alerts")
         self._setup_ui()
         self._set_values(values or {})
 
     def _setup_ui(self):
         layout = QVBoxLayout()
+
+        # On Match section
+        match_frame = QFrame()
+        match_layout = QFormLayout()
+        match_layout.addRow(SettingsHeader('On Match'))
+        self._match_enabled = QCheckBox()
+        match_layout.addRow('Speak text', self._match_enabled)
+        self._match_text = QLineEdit()
+        self._match_text.setPlaceholderText('e.g. Charm broke! (regex groups allowed: {mob})')
+        match_layout.addRow('Text to speak', self._match_text)
+
+        self._sound_enabled = QCheckBox()
+        match_layout.addRow('Play sound', self._sound_enabled)
+        sound_layout = QHBoxLayout()
+        self._sound_file = QLineEdit()
+        self._sound_file.setReadOnly(True)
+        self._sound_file.setPlaceholderText('No sound selected')
+        sound_layout.addWidget(self._sound_file, 1)
+        sound_browse = QPushButton('Browse...')
+        sound_browse.setAutoDefault(False)
+        sound_browse.clicked.connect(self._browse_sound)
+        sound_layout.addWidget(sound_browse)
+        sound_test = QPushButton('Test')
+        sound_test.setAutoDefault(False)
+        sound_test.clicked.connect(self._test_sound)
+        sound_layout.addWidget(sound_test)
+        match_layout.addRow('Sound file', sound_layout)
+        match_layout.addRow(QLabel('WAV or MP3. The file is copied into data/sounds/.'))
+        match_frame.setLayout(match_layout)
+        layout.addWidget(match_frame)
 
         # Timer Ending section
         ending_frame = QFrame()
@@ -801,7 +884,7 @@ class TriggerVoiceDialog(QDialog):
         button_layout.addWidget(QWidget(), 1)  # spacer
         ok_button = QPushButton('OK')
         ok_button.setAutoDefault(False)
-        ok_button.clicked.connect(self.accept)
+        ok_button.clicked.connect(self._ok)
         button_layout.addWidget(ok_button)
         cancel_button = QPushButton('Cancel')
         cancel_button.setAutoDefault(False)
@@ -822,6 +905,39 @@ class TriggerVoiceDialog(QDialog):
         self._ending_text.setText(values.get('voice_ending_text', ''))
         self._ended_enabled.setChecked(values.get('voice_ended_enabled', False))
         self._ended_text.setText(values.get('voice_ended_text', ''))
+        self._match_enabled.setChecked(values.get('voice_match_enabled', False))
+        self._match_text.setText(values.get('voice_match_text', ''))
+        self._sound_enabled.setChecked(values.get('sound_match_enabled', False))
+        self._sound_file.setText(values.get('sound_match_file', ''))
+
+    def _browse_sound(self, _=None):
+        path, _ = QFileDialog.getOpenFileName(self, 'Choose Sound', '', sound.FILE_FILTER)
+        if not path:
+            return
+        try:
+            self._sound_file.setText(sound.import_sound(path))
+        except OSError as e:
+            m = QMessageBox()
+            m.setText("Couldn't copy the sound file: {}".format(e))
+            m.exec()
+            return
+        self._sound_enabled.setChecked(True)
+
+    def _test_sound(self, _=None):
+        if not sound.is_available():
+            m = QMessageBox()
+            m.setText("QtMultimedia is unavailable in this PyQt5 install, so sound output is disabled.")
+            m.exec()
+        elif self._sound_file.text():
+            sound.play_preview(self._sound_file.text())
+
+    def _ok(self, _=None):
+        if self._sound_enabled.isChecked() and not self._sound_file.text():
+            m = QMessageBox()
+            m.setText("Choose a sound file, or untick 'Play sound'.")
+            m.exec()
+            return
+        self.accept()
 
     def get_values(self):
         total_seconds = (
@@ -835,4 +951,8 @@ class TriggerVoiceDialog(QDialog):
             'voice_ending_text': self._ending_text.text(),
             'voice_ended_enabled': self._ended_enabled.isChecked(),
             'voice_ended_text': self._ended_text.text(),
+            'voice_match_enabled': self._match_enabled.isChecked(),
+            'voice_match_text': self._match_text.text(),
+            'sound_match_enabled': self._sound_enabled.isChecked(),
+            'sound_match_file': self._sound_file.text(),
         }
