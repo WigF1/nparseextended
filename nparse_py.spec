@@ -3,10 +3,12 @@
 block_cipher = None
 
 from PyInstaller.utils.hooks import collect_all
-p_datas, p_bins, p_hidden = collect_all('piper')
+# piper.train is the model-training code; it needs torch and is never used at runtime
+p_datas, p_bins, p_hidden = collect_all(
+    'piper', filter_submodules=lambda name: not name.startswith('piper.train'))
 
 a = Analysis(
-    ['nparse.py'],
+    ['nparseextended.py'],
     pathex=[],
     binaries=p_bins,
     datas=p_datas,
@@ -21,9 +23,9 @@ a = Analysis(
 )
 
 from glob import glob
-a.datas += [(filename, filename, '.') for filename in glob('data/fonts/*')]
-a.datas += [('data/ui/_.css', 'data/ui/_.css', '.')]
-a.datas += [('data/ui/icon.png', 'data/ui/icon.png', '.')]
+a.datas += [(filename, filename, 'DATA') for filename in glob('data/fonts/*')]
+a.datas += [('data/ui/_.css', 'data/ui/_.css', 'DATA')]
+a.datas += [('data/ui/icon.png', 'data/ui/icon.png', 'DATA')]
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 splash = Splash(

@@ -22,7 +22,7 @@ Usage:
 1. Activate the virtual environment: 
     - Windows: `.\.venv\Scripts\activate.bat`
     - Linux: `source .venv/bin/activate`
-2. Run nParse from the repository directory: `python nparse.py`
+2. Run nParse from the repository directory: `python nparseextended.py`
 
 nParse reads `data/` and writes `nparse.config.json` relative to the directory it is started from, so always start it from the repository directory.
 
@@ -31,7 +31,7 @@ nParse reads `data/` and writes `nparse.config.json` relative to the directory i
 Development
 ========
 
-Follow the "Running from source" setup above, then run nParse with `python nparse.py`.
+Follow the "Running from source" setup above, then run nParse with `python nparseextended.py`.
 
 `test/fake_loc_sender.py` sends fake player locations to a location server, which is useful for testing location sharing on the map.
 

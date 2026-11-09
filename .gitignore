@@ -30,6 +30,8 @@ var/
 *.egg
 *.zip
 .nparsevenv/
+release/
+*.tar.gz
 
 # Installer logs
 pip-log.txt
