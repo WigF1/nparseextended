@@ -19,6 +19,7 @@ import subprocess
 import tempfile
 import threading
 import wave
+import shutil
 from pathlib import Path
 
 from helpers import config
@@ -44,6 +45,12 @@ _DEFAULT_GENDER = 'male'
 
 _VOICE_DIR = os.path.join('data', 'voices')
 _DEFAULT_RATE = 175  # matches the settings window's baseline rate slider value
+
+_LINUX_PLAYERS = (
+    ['pw-play'],          # PipeWire native
+    ['paplay'],           # pulse API via pipewire-pulse
+    ['aplay', '-q'],      # ALSA compat fallback
+)
 
 _voice_cache = {}  # model name : PiperVoice
 _cache_lock = threading.Lock()
@@ -143,6 +150,23 @@ def _speak_sync(text, gender, rate):
         # dependency should never surface as an error in the main parser.
         pass
 
+def _wav_duration(path, default=10.0):
+    try:
+        with wave.open(path, 'rb') as w:
+            return w.getnframes() / float(w.getframerate())
+    except Exception:
+        return default
+
+def _play_linux(path):
+    timeout = _wav_duration(path) + 5  # clip length plus margin
+    for cmd in _LINUX_PLAYERS:
+        if shutil.which(cmd[0]):
+            try:
+                subprocess.run(cmd + [path], check=False, timeout=timeout,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except subprocess.TimeoutExpired:
+                pass  # run() kills the child on timeout; sink is probably dead
+            return
 
 def _play_wav(path):
     system = platform.system()
@@ -152,4 +176,5 @@ def _play_wav(path):
         import winsound  # noqa: PLC0415 (Windows-only stdlib module)
         winsound.PlaySound(path, winsound.SND_FILENAME)
     else:
-        subprocess.run(['aplay', '-q', path], check=False)
+        _play_linux(path)
+
