@@ -1,4 +1,4 @@
-"""NomnsParse: Parsing tools for Project 1999."""
+"""nParseExtended: Parsing tools for Project 1999."""
 import os
 import sys
 import webbrowser
@@ -31,8 +31,8 @@ os.environ['QT_SCALE_FACTOR'] = str(
 
 CURRENT_VERSION = semver.VersionInfo(
     major=0,
-    minor=6,
-    patch=7,
+    minor=1,
+    patch=0,
 )
 if config.data['general']['update_check']:
     ONLINE_VERSION = get_version()
@@ -40,7 +40,7 @@ else:
     ONLINE_VERSION = CURRENT_VERSION
 
 
-class NomnsParse(QApplication):
+class NParseExtended(QApplication):
     """Application Control."""
 
     def __init__(self, *args):
@@ -225,12 +225,12 @@ class NomnsParse(QApplication):
 if __name__ == "__main__":
     try:
         import ctypes
-        APPID = 'nomns.nparse'
+        APPID = 'wigf1.nparseextended'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APPID)
     except:
         pass
 
-    APP = NomnsParse(sys.argv)
+    APP = NParseExtended(sys.argv)
     APP.setStyleSheet(open(resource_path('data/ui/_.css')).read())
     APP.setWindowIcon(QIcon(resource_path('data/ui/icon.png')))
     APP.setQuitOnLastWindowClosed(False)

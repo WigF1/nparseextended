@@ -2,13 +2,15 @@
 
 block_cipher = None
 
+from PyInstaller.utils.hooks import collect_all
+p_datas, p_bins, p_hidden = collect_all('piper')
 
 a = Analysis(
     ['nparse.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
+    binaries=p_bins,
+    datas=p_datas,
+    hiddenimports=p_hidden,
     hookspath=[],
     hooksconfig={},
     excludes=[],
@@ -30,7 +32,7 @@ splash = Splash(
     datas=a.datas,
     text_pos=(10, 388),
     text_size=13,
-    text_color='#666666',
+    text_color='#dae814',
     minify_script=True,
     always_on_top=False,
     max_img_size=(800, 400),
