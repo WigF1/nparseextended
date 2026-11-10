@@ -74,3 +74,6 @@ data/voices/
 
 # User-chosen trigger sounds (copied in from the Alerts dialog)
 data/sounds/
+
+# Generated from CHANGELOG.md when publishing a release
+release-notes.md

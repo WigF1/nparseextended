@@ -1,0 +1,38 @@
+# Changelog
+
+## Unreleased
+
+## v0.1.0 - 2026-11-10
+
+First release of nParseExtended, an extended version of nParse for Project 1999.
+
+### New
+
+- **Trigger categories.** Each custom trigger has a category, and its name is set automatically to "Category - Trigger text". Triggers in the same category are grouped together in the Spells window.
+- **Named groups in triggers.** With "Use Regex" on, named groups such as `(?P<target>\w+)` can be used in the trigger name and spoken text as `{target}`.
+- **Voice alerts.** Triggers can speak when they match, when their timer is about to end, and when it ends. Speech uses a natural-sounding voice (Male or Female) that runs on your computer, with an adjustable speaking rate. Turn it on under Settings → Voice.
+- **Sound alerts.** Triggers can play a WAV or MP3 file when they match. Volume and on/off are under Settings → Sound.
+- **Alert-only triggers.** Leave a trigger's time blank to have it speak or play a sound without creating a timer.
+- **Plane of Mischief map.** Added static maze mobs, roamer indicators and roaming paths, with confirmed locations.
+
+### Changed
+
+- Levitate now lasts 12 minutes, consistent with Peggy's Cloak.
+- New icon, logo and splash screen.
+
+### Fixed
+
+- Triggers that allow duplicates no longer reuse an existing timer when an earlier one expires; each match adds its own timer.
+- Voice output no longer hangs on Linux when the audio device stops responding.
+
+### Upgrading from nParse
+
+- Keep your existing `nparse.config.json`. Your settings and custom triggers are kept, and existing triggers are placed in the "Custom" category.
+- Once this version saves your settings, older versions of nParse can no longer read that config file. Back it up first if you might go back.
+
+### Install
+
+- **Windows:** download `nparse-0.1.0-windows-x64.zip`, extract it, and run `nparse.exe` from the extracted folder. Windows may show an "unknown publisher" warning the first time; choose "More info", then "Run anyway".
+- **Linux:** download `nparse-0.1.0-linux-x86_64.tar.gz`, extract it, `cd` into the folder and run `./nparse`. Requires a recent distribution (glibc 2.43 or newer, e.g. Fedora 44).
+- Always start nParse from inside its folder, because it reads its map and spell data from there.
+- The first time a voice is used, its model (about 60 MB) is downloaded, so an internet connection is needed once.
