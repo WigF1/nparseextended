@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Trigger voice and sound alerts now play while the Spells window is hidden. Spell and trigger timers also keep running in the background, so they are up to date when the window is shown again.
+
 ## v0.1.0 - 2026-11-10
 
 First release of nParseExtended, an extended version of nParse for Project 1999.
@@ -17,7 +21,7 @@ First release of nParseExtended, an extended version of nParse for Project 1999.
 
 ### Changed
 
-- Levitate now lasts 12 minutes, consistent with Peggy's Cloak.
+- Levitate now lasts 12 minutes, consistent with Pegasus Feather Cloak.
 - New icon, logo and splash screen.
 
 ### Fixed

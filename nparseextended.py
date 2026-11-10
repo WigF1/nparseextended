@@ -124,7 +124,9 @@ class NParseExtended(QApplication):
     def _parse(self, new_line):
         if new_line:
             timestamp, text = new_line  # (datetime, text)
-            #  don't send parse to non toggled items, except maps.  always parse maps
+            #  don't send parse to non toggled items, except maps and spells.  maps always
+            #  track location; spells always parse so trigger voice/sound alerts and timers
+            #  keep working while the spells window is hidden
             for parser in self._parsers:
                 if text.startswith('toggle_clickthrough_%s' % parser.name):
                     config.data[parser.name]['clickthrough'] = (
@@ -133,7 +135,7 @@ class NParseExtended(QApplication):
                     parser.set_flags()
                 elif text.startswith('toggle_%s' % parser.name):
                     parser.toggle()
-                elif config.data[parser.name]['toggled'] or parser.name == 'maps':
+                elif config.data[parser.name]['toggled'] or parser.name in ('maps', 'spells'):
                     parser.parse(timestamp, text)
 
     def _menu(self, event):
