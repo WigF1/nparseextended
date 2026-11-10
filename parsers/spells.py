@@ -576,9 +576,23 @@ def create_spell_book():
     spell_book = {}
     text_lookup_self = {}
     text_lookup_other = {}
+    player_spell_ids = set()
+
+    def add(lookup, key, spell):
+        # Many names and effect messages are shared by several entries, e.g. the druid's
+        # Savage Spirit (id 140) and three NPC/item spells of the same name. Prefer an
+        # entry a player class can cast; otherwise the last entry in the file wins.
+        existing = lookup.get(key)
+        if existing is None or spell.id in player_spell_ids or existing.id not in player_spell_ids:
+            lookup[key] = spell
+
     with open('data/spells/spells_us.txt') as spell_file:
         for line in spell_file:
             values = line.strip().split('^')
+            # columns 104-119 are the level each class gets the spell at; 254/255 = never,
+            # and anything above 65 (the highest level the spells window accepts) is unusable
+            if any(1 <= int(level) <= 65 for level in values[104:120]):
+                player_spell_ids.add(int(values[0]))
             spell = Spell(
                 id=int(values[0]),
                 name=values[1].lower(),
@@ -596,9 +610,9 @@ def create_spell_book():
                 type=int(values[83]),
                 spell_icon=int(values[144])
             )
-            spell_book[values[1]] = spell
-            text_lookup_self[spell.effect_text_you] = spell
-            text_lookup_other[spell.effect_text_other] = spell
+            add(spell_book, values[1], spell)
+            add(text_lookup_self, spell.effect_text_you, spell)
+            add(text_lookup_other, spell.effect_text_other, spell)
     return spell_book, text_lookup_self, text_lookup_other
 
 

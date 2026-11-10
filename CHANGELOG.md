@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Spells that share their name with an NPC or item spell now get timers again, for example Savage Spirit, Acumen, Enduring Breath, Selo's Song of Travel, Steelskin and Ultravision. nParse was using the NPC version's cast time and messages, so it never saw these spells land.
 - Trigger voice and sound alerts now play while the Spells window is hidden. Spell and trigger timers also keep running in the background, so they are up to date when the window is shown again.
 
 ## v0.1.0 - 2026-11-10
