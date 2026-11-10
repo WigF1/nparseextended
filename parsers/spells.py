@@ -187,11 +187,11 @@ class Spells(ParserWindow):
                 self._spell_trigger = spell_trigger
 
         # Spell Interrupted
-        elif (self._spell_triggers and
-              text[:26] == 'Your spell is interrupted.' or
-              text[:20] == 'Your target resisted' or
-              text[:29] == 'Your spell did not take hold.' or
-              text[:26] == 'You try to cast a spell on'):
+        elif (self._spell_trigger and
+              (text[:26] == 'Your spell is interrupted.' or
+               text[:20] == 'Your target resisted' or
+               text[:29] == 'Your spell did not take hold.' or
+               text[:26] == 'You try to cast a spell on')):
             self._remove_spell_trigger()
 
         # Elongate self buff timers by time zoning
@@ -216,6 +216,13 @@ class Spells(ParserWindow):
                     for spell_widget in spell_target.spell_widgets():
                         spell_widget.elongate(delay)
                         spell_widget.resume()
+
+        # Charm broke early; its timer no longer means anything
+        elif text[:29] == 'Your charm spell has worn off':
+            for spell_target in self._spell_container.spell_targets():
+                for spell_widget in spell_target.spell_widgets():
+                    if spell_widget.spell.charm:
+                        spell_widget._remove()
 
     def _remove_spell_trigger(self):
         if self._spell_trigger:
@@ -498,6 +505,7 @@ class Spell:
         self.pvp_duration = 0
         self.type = 0
         self.spell_icon = 0
+        self.charm = False  # timer is removed when "Your charm spell has worn off." is seen
         self.__dict__.update(kwargs)
 
 
@@ -608,7 +616,8 @@ def create_spell_book():
                 duration=int(values[17]),
                 pvp_duration=int(values[182]),
                 type=int(values[83]),
-                spell_icon=int(values[144])
+                spell_icon=int(values[144]),
+                charm='22' in values[86:98]  # columns 86-97 are effect ids; 22 = charm
             )
             add(spell_book, values[1], spell)
             add(text_lookup_self, spell.effect_text_you, spell)
@@ -624,20 +633,22 @@ def get_spell_duration(spell, level):
     else:
         formula, duration = spell.duration_formula, spell.duration
 
+    # For the level-based formulas, duration is the cap in ticks. A cap of 0 means
+    # uncapped (e.g. Glamour of Tunare: formula 10, cap 0, 190 ticks at level 60).
     spell_ticks = 0
     if formula == 0:
         spell_ticks = 0
     if formula == 1:
         spell_ticks = int(math.ceil(level / float(2.0)))
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 2:
         spell_ticks = int(math.ceil(level / float(5.0) * 3))
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 3:
         spell_ticks = int(level * 30)
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 4:
         if duration == 0:
@@ -650,23 +661,23 @@ def get_spell_duration(spell, level):
             spell_ticks = 3
     if formula == 6:
         spell_ticks = int(math.ceil(level / float(2.0)))
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 7:
         spell_ticks = level
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 8:
         spell_ticks = level + 10
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 9:
         spell_ticks = int((level * 2) + 10)
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 10:
         spell_ticks = int(level * 3 + 10)
-        if spell_ticks > duration:
+        if duration and spell_ticks > duration:
             spell_ticks = duration
     if formula == 11:
         spell_ticks = duration
