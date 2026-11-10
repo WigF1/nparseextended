@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.2.0 - 2026-11-10
+
+Numerous fixes and a new nomenclature for the app and folder
+
 ### New
 
 - **Charm timers clear when charm breaks.** When "Your charm spell has worn off." appears, timers for charm spells such as Call of Karana, Allure of the Wild and Thrall of Bones are removed.
