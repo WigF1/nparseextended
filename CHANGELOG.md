@@ -12,6 +12,30 @@
 - Spells whose duration depends only on your level now get timers, for example Glamour of Tunare, Malise, Malisement, Feckless Might, Insipid Weakness, Gaze, Magnify and Bind Sight. They were previously given a 0-second timer that vanished immediately.
 - An interrupted spell no longer gets a timer if its landing message appears later, for example from someone else casting the same spell.
 - Trigger voice and sound alerts now play while the Spells window is hidden. Spell and trigger timers also keep running in the background, so they are up to date when the window is shown again.
+- "Check for Updates" works again. It now checks this project's GitHub releases, and the "Update Available" item in the tray menu opens the latest release page. Previously it checked a server that no longer exists and linked to the original nParse project.
+
+### Changed
+
+- The program is now called `nparse-extended` (`nparse-extended.exe` on Windows) and comes in a folder called `nParseExtended`. The folder name no longer includes the version, so future updates can be extracted straight over it.
+
+### Upgrading from v0.1.0
+
+This version's folder has a new name, so settings need to be copied over once:
+
+1. Extract this release next to your existing `nparse-0.1.0` folder. It creates a folder called `nParseExtended`.
+2. Copy these from `nparse-0.1.0` into `nParseExtended`, if you have them:
+   - `nparse.config.json`: your settings and custom triggers.
+   - `data/sounds/`: the sound files your triggers play. Without it, sound alerts are silent.
+   - `data/voices/`: downloaded voice models. Without it, they download again the first time voice is used.
+3. Run `nparse-extended` (`nparse-extended.exe` on Windows) from the `nParseExtended` folder. Once everything works, you can delete `nparse-0.1.0`.
+
+From the next release on, upgrading is simpler: extract the new release into the folder that contains `nParseExtended` and let it replace the existing files. Your settings, trigger sounds and voice models are kept. On Windows, "Extract All" suggests a new folder named after the zip file; change it to the folder that contains `nParseExtended`.
+
+### Install
+
+- **Windows:** download `nparse-<version>-windows-x64.zip`, extract it, and run `nparse-extended.exe` from the `nParseExtended` folder. Windows may show an "unknown publisher" warning the first time; choose "More info", then "Run anyway".
+- **Linux:** download `nparse-<version>-linux-x86_64.tar.gz`, extract it, `cd nParseExtended` and run `./nparse-extended`. Requires a recent distribution (glibc 2.43 or newer, e.g. Fedora 44).
+- Always start nParseExtended from inside its folder, because it reads its map and spell data from there.
 
 ## v0.1.0 - 2026-11-10
 

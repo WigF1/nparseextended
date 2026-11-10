@@ -2,22 +2,24 @@ import sys
 import os
 import math
 import requests
-import json
 from datetime import datetime, timedelta
 import semver
 
 from .parser import ParserWindow  # noqa: F401
 
 
+RELEASES_URL = 'https://github.com/WigF1/nparseextended/releases/latest'
+_LATEST_RELEASE_API = 'https://api.github.com/repos/WigF1/nparseextended/releases/latest'
+
+
 def get_version():
-    version = None
+    """Returns the version of the latest published GitHub release, or None if it can't be checked."""
     try:
-        r = requests.get('http://sheeplauncher.net/~adam/nparse_version.json')
-        version_text = json.loads(r.text)['version']
-        version = semver.parse_version_info(version_text)
-    except:
-        pass
-    return version
+        r = requests.get(_LATEST_RELEASE_API, timeout=5)
+        r.raise_for_status()
+        return semver.Version.parse(r.json()['tag_name'].lstrip('v'))  # tags are 'v0.1.0'
+    except Exception:
+        return None
 
 
 def parse_line(line):

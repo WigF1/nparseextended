@@ -67,20 +67,21 @@ Get-ChildItem "$qt\*140*.dll" | ForEach-Object {
 
 Each replaced file should report version 14.40 or higher. If System32's copies are older than that, install the latest [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) on the build machine first.
 
-This is only needed on the build machine. PyInstaller bundles these DLLs into `nparse.exe`, so users do not need to install the Visual C++ Redistributable. To confirm a build works without it, run it in Windows Sandbox, which starts from a clean copy of Windows.
+This is only needed on the build machine. PyInstaller bundles these DLLs into `nparse-extended.exe`, so users do not need to install the Visual C++ Redistributable. To confirm a build works without it, run it in Windows Sandbox, which starts from a clean copy of Windows.
 
 Usage:
 
-1. Build nParse: `pyinstaller --clean nparse_py.spec`
-2. The compiled nParse executable will be in:
-    - Windows: `dist\nparse.exe`
-    - Linux: `dist/nparse`
+1. Set the release version in `CURRENT_VERSION` near the top of `nparseextended.py`, e.g. `major=0, minor=2, patch=0` for release `v0.2.0`, and commit it. The update check compares this against the latest GitHub release, so a build with an old version number tells its users to update to the version they already have.
+2. Build nParse: `pyinstaller --clean nparse_py.spec`
+3. The compiled nParse executable will be in:
+    - Windows: `dist\nparse-extended.exe`
+    - Linux: `dist/nparse-extended`
 
 The executable bundles Python, the libraries, fonts and UI files, but not the map and spell data. Those are read from a `data/` folder next to where nParse is started, so a release must ship them alongside the executable:
 
 ```
-nparse-<version>/
-├── nparse            (nparse.exe on Windows)
+nParseExtended/
+├── nparse-extended   (nparse-extended.exe on Windows)
 └── data/
     ├── maps/
     └── spells/
@@ -88,14 +89,16 @@ nparse-<version>/
 
 Do not include `nparse.config.json`, `data/voices/` or `data/sounds/`; these hold your own settings, downloaded voice models and trigger sounds, and are created on first use.
 
+The folder inside the archive is always called `nParseExtended` (the version is only in the archive's file name), so users can upgrade by extracting a new release over their existing folder. Their settings, trigger sounds and voice models are kept because the archive does not contain them.
+
 Packaging a Linux release:
 
 ```bash
 VER=1.0.0
-mkdir -p release/nparse-$VER/data
-cp dist/nparse release/nparse-$VER/
-cp -r data/maps data/spells release/nparse-$VER/data/
-tar -C release -czf nparse-$VER-linux-x86_64.tar.gz nparse-$VER
+rm -rf release && mkdir -p release/nParseExtended/data
+cp dist/nparse-extended release/nParseExtended/
+cp -r data/maps data/spells release/nParseExtended/data/
+tar -C release -czf nparse-$VER-linux-x86_64.tar.gz nParseExtended
 ```
 
 Linux builds only run on distributions whose glibc is the same version or newer than the one on the build machine. To support older distributions, build on an older distribution (for example in a container).
@@ -104,20 +107,21 @@ Packaging a Windows release (PowerShell):
 
 ```powershell
 $VER = "1.0.0"
-$dir = "release\nparse-$VER"
+$dir = "release\nParseExtended"
+Remove-Item -Recurse -Force release -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force "$dir\data" | Out-Null
-Copy-Item dist\nparse.exe $dir
+Copy-Item dist\nparse-extended.exe $dir
 Copy-Item -Recurse data\maps, data\spells "$dir\data"
 Compress-Archive -Path $dir -DestinationPath "nparse-$VER-windows-x64.zip" -Force
 ```
 
 Windows builds run on Windows 10 and 11. If UPX is installed on the build machine, PyInstaller compresses the bundled DLLs with it, which can break the Qt and onnxruntime DLLs and trigger antivirus false positives; either uninstall UPX or set `upx=False` in `nparse_py.spec`. The executable is not code-signed, so Windows SmartScreen shows an "unknown publisher" warning the first time it is run ("More info", then "Run anyway").
 
-Before publishing, extract the release into an empty directory and start nParse from there (`./nparse` on Linux, double-click `nparse.exe` on Windows). Check that the splash screen appears, maps load, spell timers appear, a trigger sound plays and "Test Voice" in the settings speaks. The first voice test downloads the voice model, so it needs an internet connection.
+Before publishing, extract the release into an empty directory and start nParse from there (`./nparse-extended` on Linux, double-click `nparse-extended.exe` on Windows). Check that the splash screen appears, maps load, spell timers appear, a trigger sound plays and "Test Voice" in the settings speaks. The first voice test downloads the voice model, so it needs an internet connection.
 
 Publishing a GitHub release (from either machine, using the same `VER`):
 
-Release notes come from `CHANGELOG.md`. Add changes under "Unreleased" as you work, and before releasing rename that heading to `## v<version> - <date>` and add a new empty "Unreleased" heading above it. Each version's section should say what is new, changed and fixed, anything users must know when upgrading, and how to install.
+Release notes come from `CHANGELOG.md`. Add changes under "Unreleased" as you work, and before releasing rename that heading to `## v<version> - <date>` and add a new empty "Unreleased" heading above it. Each version's section should say what is new, changed and fixed, how to upgrade, and how to install. The "Check for Updates" setting sends users to the latest release page, so the upgrade steps in the notes are what they will follow.
 
 ```bash
 git tag v$VER && git push origin v$VER

@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QMenu, QMessageBox,
 import semver
 
 import parsers
-from helpers import config, logreader, resource_path, get_version, location_service
+from helpers import config, logreader, resource_path, get_version, location_service, RELEASES_URL
 from helpers.settings import SettingsWindow
 
 try:
@@ -29,9 +29,11 @@ os.environ['QT_SCALE_FACTOR'] = str(
     config.data['general']['qt_scale_factor'] / 100)
 
 
+# Must match the release tag (v0.1.0 -> 0.1.0); bump it before building a release,
+# or the build will report its own version as an available update.
 CURRENT_VERSION = semver.VersionInfo(
     major=0,
-    minor=1,
+    minor=2,
     patch=0,
 )
 if config.data['general']['update_check']:
@@ -68,7 +70,7 @@ class NParseExtended(QApplication):
 
         if self.new_version_available():
             self._system_tray.showMessage(
-                "nParse Update",
+                "nParseExtended Update",
                 "New version available!\n"
                 "Current: {}\n"
                 "Online: {}".format(
@@ -169,7 +171,7 @@ class NParseExtended(QApplication):
         action = menu.exec_(QCursor.pos())
 
         if action == check_version_action:
-            webbrowser.open('https://github.com/nomns/nparse/releases')
+            webbrowser.open(RELEASES_URL)
 
         elif action == get_eq_dir_action:
             dir_path = str(QFileDialog.getExistingDirectory(

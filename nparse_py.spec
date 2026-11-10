@@ -48,7 +48,7 @@ exe = EXE(
     a.datas,
     splash,
     splash.binaries,
-    name='nparse',
+    name='nparse-extended',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
